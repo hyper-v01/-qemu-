@@ -153,43 +153,58 @@ function whence_process	#找qemu的结果的处理
 function disk_local		#本地磁盘专用函数
 {
 	echo "你的虚拟磁盘文件在哪里?"
-	echo "[目录],你的终端在 $(pwd)   默认($(pwd))"
+	echo "[位置][没有的可以写None],你的终端在 $(pwd)   默认($(pwd))"
 	while	read disk_path
 	do
 		if test -z $disk_path; then
 			echo "写个正确的磁盘位置吧"
+			echo ""
+			echo "你的虚拟磁盘文件在哪里?"
+			echo "[位置][没有的可以写None],你的终端在 $(pwd)   默认($(pwd))"
 		else
-			export file5=$(ls $disk_path)
-			if test -z $file5; then
-				echo "$disk_path 这里似乎没有任何文件"
+			if [ $disk_path = 'None' ]; then
+				break
+				return 0
 			else
-				for d in $disk_path/*.img *.vhd *.qcow *.qcow2 *.vdi *.vmdk
-				do
-					ls $d
-					if (( $? != 0 )); then
-						echo "$disk_path 这里似乎没有任何一个磁盘文件"
-					else
-						if (( $? == 0 )); then
-							export disk_file=$(ls $d)
-							break
+				export file5=$(ls $disk_path)
+				if test -z $file5; then
+					echo "$disk_path 这里似乎没有任何文件"
+					echo ""
+					echo "你的虚拟磁盘文件在哪里?"
+					echo "[位置][没有的可以写None],你的终端在 $(pwd)   默认($(pwd))"
+				else
+					for d in $disk_path/*.img *.vhd *.qcow *.qcow2 *.vdi *.vmdk
+					do
+						ls $d
+						if (( $? != 0 )); then
+							echo "$disk_path 这里似乎没有任何一个磁盘文件"
+							echo ""
+							echo "你的虚拟磁盘文件在哪里?"
+							echo "[位置][没有的可以写None],你的终端在 $(pwd)   默认($(pwd))"
+						else
+							if (( $? == 0 )); then
+								export disk_file=$(ls $d)
+								break
+							fi
 						fi
+					done
+					if (( $? == 0 )); then
+						break
 					fi
-				done
-				if (( $? == 0 )); then
-					break
 				fi
 			fi
 		fi
 	done
 	echo "你要用哪一个磁盘文件?"
-	ls $d
+	for d in $disk_path/*.img *.vhd *.qcow *.qcow2 *.vdi *.vmdk;do echo $(ls $d);done
 	while read disk_file1
 	do
 		ls $disk_path/$disk_file1
 		if (( $? == 0 )); then
 			export RealDisk=$disk_path/$disk_file1
+			export enable_disk=1
+			disk_model
 			break
-			return 1
 		fi
 	done
 
@@ -226,6 +241,15 @@ function disks		#掌柜的，来个磁盘，新的
 	read disk
 	if [ $disk = 'local' ]; then
 		disk_local
+		if (( $? == 1 )); then
+			export enable_disk=1
+			export RealDisk1="-drive if=none,file=$RealDisk,id=hd0"
+		else
+			if (( $? == 0 )); then
+				export enable_disk=0
+				export RealDisk1=''
+			fi
+		fi
 	else
 		YES_NO $disk
 	fi
@@ -290,7 +314,7 @@ function space_process	#彳亍，15GB，三十块
 	fi
 
 }
-function disk_other  	#磁盘其他
+function disk_create1  	#磁盘其他
 {	
 
 	echo "你的磁盘叫什么名字?"
@@ -331,31 +355,34 @@ else
 		fi
 	fi
 fi
-
+}
+function disk_model
+{
 	echo "磁盘的型号?"
 	echo "[virtio][scsi]  默认(virtio)"
-while read model
-do
-	if test -z $model; then
-		export DISK2="-device virtio-blk-pci,id=$name,bus=pci.0"
-		echo "你选择了 $model"
-		break
-	else
-		if [ $model = 'virtio' ]; then
-		export DISK2="-device virtio-blk-pci,id=$name,bus=pci.0"
-		echo "你选择了 $model"
-		break
+	while read model
+	do
+		if test -z $model; then
+			export DISK2="-device virtio-blk-pci,drive=hd0,bus=pci.0"
+			export model='virtio'
+			echo "你选择了 $model"
+			break
 		else
-	      	 	if	[ $model = 'scsi' ]; then
-				export DISK2="-device ahci,id=ahci -device ide-drive,drive=$name,bus=ahci.0"
-				echo "你选择了 $model"
-				break
+			if [ $model = 'virtio' ]; then
+			export DISK2="-device virtio-blk-pci,drive=hd0,bus=pci.0"
+			echo "你选择了 $model"
+			break
 			else
-				Error 6
-	       		fi
+		      	 	if	[ $model = 'scsi' ]; then
+						export DISK2="-device ahci,id=ahci -device ide-drive,drive=hd0,bus=ahci.0"
+						echo "你选择了 $model"
+						break
+					else
+						Error 6
+	     		  	fi
+			fi
 		fi
-	fi
-done
+	done
 }
 function create_img		#出来吧qemu-img
 {
@@ -785,7 +812,7 @@ function enable_network		#网好卡，好网卡
 				while read network_model
 				do
 					if test -z $network_model; then
-						export network='virtio'
+						export network='rtl8139'
 						echo "你选择了 $network"
 						export RealNetwork="-netdev user,id=eth0 -net nic,model=$network,netdev=eth0"	
 						return 1
@@ -1044,11 +1071,16 @@ function All_process			#后期处理
 	choose_arch
 	export RealArch=$Arch
 	disks
+	if (( $enable_disk == 1 )); then
+		export RealDisk2="-drive if=none,file=$RealDisk,id=hd0"
+	else
+		export RealDisk2=''
+	fi
 	if (( $disk_nee == 1 )); then
 		disks_spaces
 		space_process
 		disk_other
-		export create_img="qemu-img create -f $Format $name.img $RealSpace$RealUnit"
+		export create_img="qemu-img create -f $disk_format $name.img $RealSpace$RealUnit"
 		create_img
 	fi
 	cdrom
@@ -1113,13 +1145,16 @@ echo "请稍等"
 sleep 3s
 All_process
 export Realmem="-m $RMEMORY"
-echo "$Arch $qemu_boot $Realmem $RealBios1 $DISK2 $RealDisk $RealImage1 $RealFloppy1 $RealInitrd1 $RealVmlinuz1 $RealDSP $RealNetwork1 $RealCPU $RealVGA $RealCores1"
-export ALL="$Arch $qemu_boot $RealBios1 $Realmem $DISK2 $RealDisk $RealImage1 $RealFloppy1 $RealInitrd1 $RealVmlinuz1 $RealDSP $RealNetwork1 $RealCPU $RealVGA $RealCores1"
+echo "$Arch $qemu_boot $Realmem $RealBios1 $RealDisk2 $DISK2 $RealImage1 $RealFloppy1 $RealInitrd1 $RealVmlinuz1 $RealDSP $RealNetwork1 $RealCPU $RealVGA $RealCores1"
+export ALL="$Arch $qemu_boot $RealBios1 $Realmem $RealDisk2 $DISK2 $RealImage1 $RealFloppy1 $RealInitrd1 $RealVmlinuz1 $RealDSP $RealNetwork1 $RealCPU $RealVGA $RealCores1"
+echo "给你的脚本文件起个名字吧"
 while read filename
 do
-	echo "给你的脚本文件起个名字吧"
 	if test -z $filename; then
 		echo "名字不能为空"
+		echo ""
+		sleep 1s
+		echo "给你的脚本文件起个名字吧"
 	else
 		export NAME=$filename
 		echo "请稍等"
