@@ -129,6 +129,7 @@ export Install_qemu_arm=0
 		echo "qemu-system-arm"
 	else
 		export Install_qemu_arm=1
+	fi
 	Error 0
 }
 function YES_NO		#对“是否”的处理
@@ -1141,7 +1142,7 @@ function telnet
 	echo "[数字]1-255   默认(16)"
 	while read telnet_port
 	do
-		export telnet_port=(echo $telnet_port|tr -cd '[0-9]')
+		export telnet_port=$(echo $telnet_port|tr -cd '[0-9]')
 		if (( $telnet_port < 1 )); then
 			Error 7
 		else
@@ -1164,7 +1165,7 @@ echo "telnet 127.0.0.1 $telnet_port"
 }
 function All_process			#后期处理
 {
-	if ls /etc/apt; then
+	if echo $(ls /etc/apt)>1.log; then
 		install_qemu
 		choose_arch
 		export RealArch=$Arch
@@ -1269,3 +1270,4 @@ do
 	fi
 done
 echo $ALL > $NAME.sh
+rm 1.log
