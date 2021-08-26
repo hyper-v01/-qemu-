@@ -1143,16 +1143,16 @@ function telnet
 	while read telnet_port
 	do
 		export telnet_port=$(echo $telnet_port|tr -cd '[0-9]')
-		if (( $telnet_port < 1 )); then
-			Error 7
+		if test -z $telnet_port; then
+			export telnet_port=16
+			echo "你选择了端口 $telnet_port"
+			break
 		else
 			if (( $telnet_port > 255 )); then
 				Error 7
 			else
-				if test -z $telnet_port; then
-					export telnet_port=16
-					echo "你选择了端口 $telnet_port"
-					break
+				if (( $telnet_port < 1 )); then
+					Error 7
 				else
 					echo "你选择了端口 $telnet_port"
 					break
@@ -1170,7 +1170,7 @@ function All_process			#后期处理
 		choose_arch
 		export RealArch=$Arch
 		disks
-		if (( $enable_disk == 1 )); then
+		if (( $? == 1 )); then
 			export RealDisk2="-drive if=none,file=$RealDisk,id=hd0"
 		else
 			export RealDisk2=''
