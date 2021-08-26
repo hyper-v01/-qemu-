@@ -1162,6 +1162,7 @@ function telnet
 	done
 echo "你现在可以打开新的终端通过此命令连接到控制台"
 echo "telnet 127.0.0.1 $telnet_port"
+echo "不过启用telnet可能需要root授权，最好使用sudo运行"
 }
 function All_process			#后期处理
 {
